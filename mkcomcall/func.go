@@ -80,7 +80,7 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 			switch t := p.Type.(type) {
 			case *ast.Ident:
 				switch t.Name {
-				case "int":
+				case "int", "int32", "uint", "uint32":
 					params = append(params, "uintptr("+ident.Name+")")
 
 				case "string":
@@ -97,8 +97,21 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 					return
 				}
 
+			case *ast.StarExpr:
+				params = append(params, "uintptr(unsafe.Pointer("+ident.Name+"))")
+
+			case *ast.ArrayType:
+				if t.Len == nil {
+					// It's a slice.
+					params = append(params, "uintptr(unsafe.Pointer(&"+ident.Name+"[0]))",
+						"uintptr(len("+ident.Name+"))")
+				} else {
+					// It's an array.
+					params = append(params, "uintptr(unsafe.Pointer(&"+ident.Name+"))")
+				}
+
 			default:
-				err = fmt.Errorf("unsupported parameter type: %s", t)
+				err = fmt.Errorf("unsupported parameter type: %T", t)
 			}
 		}
 	}

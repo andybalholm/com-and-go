@@ -15,6 +15,20 @@ type GUID struct {
 	Data4 [8]byte
 }
 
+func (g *GUID) String()string {
+	s := make([]uint16, 40)
+	n := StringFromGUID2(g, s)
+	return string(utf16.Decode(s[:n-1]))
+}
+
+func NewGUID(s string) *GUID {
+	g, err := CLSIDFromString(s)
+	if err != nil {
+		panic(fmt.Errorf("error parsing GUID (%q): %s", s, err))
+	}
+	return &g
+}
+
 type HResult int32
 
 func (hr HResult) Error() string {

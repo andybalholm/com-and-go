@@ -14,7 +14,7 @@ type IUnknown struct {
 	vtable *VTable
 }
 
-var IID_IUnknown = &GUID{0x00000000, 0x0000, 0x0000, [8]byte{0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}}
+var IID_IUnknown = NewGUID("{00000000-0000-0000-C000-000000000046}")
 
 // QueryInterface converts u to the interface whose GUID is specified.
 // If u does not implement that interface, it returns nil.
