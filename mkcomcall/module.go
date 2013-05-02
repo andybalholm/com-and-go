@@ -22,6 +22,9 @@ type module struct {
 	// dllFuncs is the functions imported from DLLs, organized by DLL name.
 	dllFuncs map[string][]*ast.FuncDecl
 
+	// interfaces is the COM interfaces declared in the module.
+	interfaces map[string]*iface
+
 	// imports is a list of packages that need to be imported.
 	imports map[string]*ast.ImportSpec
 
@@ -33,9 +36,10 @@ type module struct {
 
 func newModule(fileSet *token.FileSet) *module {
 	return &module{
-		imports:  make(map[string]*ast.ImportSpec),
-		dllFuncs: make(map[string][]*ast.FuncDecl),
-		fileSet:  fileSet,
+		imports:    make(map[string]*ast.ImportSpec),
+		dllFuncs:   make(map[string][]*ast.FuncDecl),
+		interfaces: make(map[string]*iface),
+		fileSet:    fileSet,
 		printConfig: printer.Config{
 			Mode: printer.TabIndent | printer.UseSpaces,
 		},
@@ -96,6 +100,20 @@ func (m *module) write(w io.Writer) error {
 		}
 	}
 
+	for ifName := range m.interfaces {
+		err := m.calcVTStart(ifName, 0)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, i := range m.interfaces {
+		err := m.writeInterface(w, i)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, decl := range m.miscDecls {
 		err := m.printConfig.Fprint(w, m.fileSet, decl)
 		if err != nil {
@@ -136,7 +154,23 @@ func (m *module) loadFile(f *ast.File) error {
 			}
 
 		case *ast.GenDecl:
-			if d.Tok == token.IMPORT {
+			switch d.Tok {
+			case token.IMPORT:
+				continue
+
+			case token.TYPE:
+				for _, spec := range d.Specs {
+					ts := spec.(*ast.TypeSpec)
+					if ts.Doc == nil {
+						ts.Doc = d.Doc
+					}
+					IF, err := newIface(ts)
+					if err != nil {
+						return err
+					}
+					m.addImport("syscall")
+					m.interfaces[IF.name] = IF
+				}
 				continue
 			}
 		}

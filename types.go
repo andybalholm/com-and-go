@@ -15,7 +15,7 @@ type GUID struct {
 	Data4 [8]byte
 }
 
-func (g *GUID) String()string {
+func (g *GUID) String() string {
 	s := make([]uint16, 40)
 	n := StringFromGUID2(g, s)
 	return string(utf16.Decode(s[:n-1]))
