@@ -133,13 +133,34 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 		}
 	}
 
-	for _, p := range ft.Results.List {
-		if p.Names == nil {
-			err = errors.New("anonymous parameters are not supported")
-			return
-		}
-		for _, ident := range p.Names {
-			params = append(params, "uintptr(unsafe.Pointer(&"+ident.Name+"))")
+	if ft.Results != nil {
+		for _, p := range ft.Results.List {
+			if p.Names == nil {
+				err = errors.New("anonymous parameters are not supported")
+				return
+			}
+
+			if t, ok := p.Type.(*ast.Ident); ok && t.Name == "string" {
+				for _, ident := range p.Names {
+					tmpName := "_tmp_" + ident.Name
+					if m.packageName == "com" {
+						setupCode += fmt.Sprintf("\tvar %s BStr\n", tmpName)
+						resultCode += fmt.Sprintf("\t%s = %s.String()\n\tSysFreeString(%s)\n",
+							ident.Name, tmpName, tmpName)
+					} else {
+						setupCode += fmt.Sprintf("\tvar %s com.BStr\n", tmpName)
+						resultCode += fmt.Sprintf("\t%s = %s.String()\n\tcom.SysFreeString(%s)\n",
+							ident.Name, tmpName, tmpName)
+					}
+
+					params = append(params, fmt.Sprintf("uintptr(unsafe.Pointer(&%s))", tmpName))
+				}
+				continue
+			}
+
+			for _, ident := range p.Names {
+				params = append(params, "uintptr(unsafe.Pointer(&"+ident.Name+"))")
+			}
 		}
 	}
 

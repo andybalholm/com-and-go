@@ -7,4 +7,5 @@ func(ole32) CoCreateInstance(classID *GUID, outer *IUnknown, clsContext uint32, 
 func(ole32) StringFromGUID2(guid *GUID, str []uint16) (n int)
 func(ole32) CLSIDFromString(s string) (clsID GUID, err error)
 func(oleaut32) SysAllocString(s string) (bstr *uint16)
+func(oleaut32) SysFreeString(s BStr)
 */

@@ -19,6 +19,7 @@ var (
 	procStringFromGUID2  = modole32.NewProc("StringFromGUID2")
 	procCLSIDFromString  = modole32.NewProc("CLSIDFromString")
 	procSysAllocString   = modoleaut32.NewProc("SysAllocString")
+	procSysFreeString    = modoleaut32.NewProc("SysFreeString")
 )
 
 func CoInitialize(reserved int) (err error) {
@@ -70,6 +71,12 @@ func CLSIDFromString(s string) (clsID GUID, err error) {
 func SysAllocString(s string) (bstr *uint16) {
 	_res, _, _ := procSysAllocString.Call(uintptr(unsafe.Pointer(BStrFromString(s).P)))
 	bstr = (*uint16)(unsafe.Pointer(_res))
+	return
+}
+
+func SysFreeString(s BStr) {
+	_res, _, _ := procSysFreeString.Call(uintptr(unsafe.Pointer(s.P)))
+	_ = _res
 	return
 }
 
