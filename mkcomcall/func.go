@@ -88,17 +88,25 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 				switch t.Name {
 				case "int", "int8", "int16", "int32", "uint", "uint8", "uint16", "uint32", "byte", "rune":
 					params = append(params, "uintptr("+ident.Name+")")
+					continue
 
 				case "string":
-					params = append(params, "uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("+ident.Name+")))")
+					s := "uintptr(unsafe.Pointer("
+					if m.packageName != "com" {
+						s += "com."
+					}
+					s += "BStrFromString(" + ident.Name + ").P))"
+					params = append(params, s)
+					continue
 
-				default:
-					err = fmt.Errorf("unsupported parameter type: %s", t.Name)
-					return
+				case "BStr":
+					params = append(params, "uintptr(unsafe.Pointer("+ident.Name+".P))")
+					continue
 				}
 
 			case *ast.StarExpr:
 				params = append(params, "uintptr(unsafe.Pointer("+ident.Name+"))")
+				continue
 
 			case *ast.ArrayType:
 				if t.Len == nil {
@@ -109,10 +117,19 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 					// It's an array.
 					params = append(params, "uintptr(unsafe.Pointer(&"+ident.Name+"))")
 				}
+				continue
 
-			default:
-				err = fmt.Errorf("unsupported parameter type: %T", t)
+			case *ast.SelectorExpr:
+				if ident, ok := t.X.(*ast.Ident); ok && ident.Name == "com" && t.Sel.Name == "BStr" {
+					params = append(params, "uintptr(unsafe.Pointer("+ident.Name+".P))")
+					continue
+				}
 			}
+
+			buf := new(bytes.Buffer)
+			m.printConfig.Fprint(buf, m.fileSet, p.Type)
+			err = fmt.Errorf("unsupported parameter type: %s", buf)
+			return
 		}
 	}
 

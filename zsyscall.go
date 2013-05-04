@@ -30,7 +30,7 @@ func CoInitialize(reserved int) (err error) {
 }
 
 func CLSIDFromProgID(progID string) (classID GUID, err error) {
-	_res, _, _ := procCLSIDFromProgID.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(progID))),
+	_res, _, _ := procCLSIDFromProgID.Call(uintptr(unsafe.Pointer(BStrFromString(progID).P)),
 		uintptr(unsafe.Pointer(&classID)))
 	if _res != 0 {
 		err = HResult(_res)
@@ -59,7 +59,7 @@ func StringFromGUID2(guid *GUID, str []uint16) (n int) {
 }
 
 func CLSIDFromString(s string) (clsID GUID, err error) {
-	_res, _, _ := procCLSIDFromString.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(s))),
+	_res, _, _ := procCLSIDFromString.Call(uintptr(unsafe.Pointer(BStrFromString(s).P)),
 		uintptr(unsafe.Pointer(&clsID)))
 	if _res != 0 {
 		err = HResult(_res)
@@ -68,7 +68,7 @@ func CLSIDFromString(s string) (clsID GUID, err error) {
 }
 
 func SysAllocString(s string) (bstr *uint16) {
-	_res, _, _ := procSysAllocString.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(s))))
+	_res, _, _ := procSysAllocString.Call(uintptr(unsafe.Pointer(BStrFromString(s).P)))
 	bstr = (*uint16)(unsafe.Pointer(_res))
 	return
 }

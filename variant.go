@@ -93,7 +93,11 @@ func ToVariant(x interface{}) Variant {
 	case *float64:
 		return Variant{VT_R8 | VT_BYREF, 0, 0, 0, uint64(uintptr(unsafe.Pointer(v)))}
 	case string:
-		return Variant{VT_BSTR, 0, 0, 0, uint64(uintptr(unsafe.Pointer(SysAllocString(v))))}
+		return Variant{VT_BSTR, 0, 0, 0, uint64(uintptr(unsafe.Pointer(BStrFromString(v).P)))}
+	case BStr:
+		return Variant{VT_BSTR, 0, 0, 0, uint64(uintptr(unsafe.Pointer(v.P)))}
+	case *BStr:
+		return Variant{VT_BSTR | VT_BYREF, 0, 0, 0, uint64(uintptr(unsafe.Pointer(v)))}
 	case *IDispatch:
 		return Variant{VT_DISPATCH, 0, 0, 0, uint64(uintptr(unsafe.Pointer(v)))}
 	case **IDispatch:
@@ -178,4 +182,12 @@ func (v Variant) IUnknown() *IUnknown {
 		return *(**IUnknown)(unsafe.Pointer(uintptr(v.Val)))
 	}
 	panic(fmt.Errorf("can't convert Variant with type 0x%04X to IUnknown", v.VT))
+}
+
+func (v Variant) String() string {
+	switch v.VT {
+	case VT_BSTR:
+		return BStr{(*uint16)(unsafe.Pointer(uintptr(v.Val)))}.String()
+	}
+	panic(fmt.Errorf("can't convert Variant with type 0x%04X to string", v.VT))
 }
