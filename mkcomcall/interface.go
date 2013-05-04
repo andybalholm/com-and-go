@@ -178,7 +178,7 @@ func (m *module) writeInterface(w io.Writer, i *iface) error {
 
 		fmt.Fprintln(w, " {")
 
-		params, setupCode, errReturn, intReturn, err := m.analyzeParameterList(meth.Type.(*ast.FuncType))
+		params, setupCode, resultCode, err := m.analyzeParameterList(meth.Type.(*ast.FuncType))
 		if err != nil {
 			return err
 		}
@@ -220,20 +220,7 @@ func (m *module) writeInterface(w io.Writer, i *iface) error {
 			nParams,
 			strings.Join(params, ",\n\t\t"))
 
-		switch {
-		case errReturn != "":
-			fmt.Fprint(w, "\tif _res != 0 {\n\t\t", errReturn, " = ")
-			if m.packageName != "com" {
-				fmt.Fprint(w, "com.")
-			}
-			fmt.Fprint(w, "HResult(_res)\n\t}\n")
-
-		case intReturn != "":
-			fmt.Fprint(w, "\t", intReturn, " = int(_res)\n")
-
-		default:
-			fmt.Fprintln(w, "\t_ = _res")
-		}
+		fmt.Fprint(w, resultCode)
 		fmt.Fprintln(w, "\treturn")
 
 		fmt.Fprintln(w, "}")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -18,7 +19,7 @@ func (m *module) writeFunc(w io.Writer, f *ast.FuncDecl) error {
 	}
 	fmt.Fprintln(w, "{")
 
-	params, setupCode, errReturn, intReturn, err := m.analyzeParameterList(f.Type)
+	params, setupCode, resultCode, err := m.analyzeParameterList(f.Type)
 	if err != nil {
 		return err
 	}
@@ -28,20 +29,7 @@ func (m *module) writeFunc(w io.Writer, f *ast.FuncDecl) error {
 	}
 	fmt.Fprintf(w, "\t_res, _, _ := proc%s.Call(%s)\n", f.Name.Name, strings.Join(params, ",\n\t\t"))
 
-	switch {
-	case errReturn != "":
-		fmt.Fprint(w, "\tif _res != 0 {\n\t\t", errReturn, " = ")
-		if m.packageName != "com" {
-			fmt.Fprint(w, "com.")
-		}
-		fmt.Fprint(w, "HResult(_res)\n\t}\n")
-
-	case intReturn != "":
-		fmt.Fprint(w, "\t", intReturn, " = int(_res)\n")
-
-	default:
-		fmt.Fprintln(w, "\t_ = _res")
-	}
+	fmt.Fprint(w, resultCode)
 	fmt.Fprintln(w, "\treturn")
 
 	fmt.Fprintln(w, "}")
@@ -52,23 +40,41 @@ func (m *module) writeFunc(w io.Writer, f *ast.FuncDecl) error {
 // analyzeParameterList analyzes a function or method's parameter list and
 // creates the actual parameter list that will be used to call it.
 // setupCode is the code that needs to be called before the actuall call to the
-// DLL function. If the last return value is an error or an int, its name will
-// be put in errReturn or intReturn respectively.
-func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupCode, errReturn, intReturn string, err error) {
+// DLL function. resultCode is the code, to be run after the function call,
+// that sets up the return value. It assumes that the first return value from
+// the DLL function is assigned to a variable named _res.
+func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupCode, resultCode string, err error) {
 	// Find errReturn or intReturn.
 	if results := ft.Results; results != nil && len(results.List) > 0 {
 		lastResult := results.List[len(results.List)-1]
-		if typeIdent, ok := lastResult.Type.(*ast.Ident); ok && len(lastResult.Names) == 1 {
-			name := lastResult.Names[0].Name
-			switch typeIdent.Name {
+		name := lastResult.Names[0].Name
+		switch lrt := lastResult.Type.(type) {
+		case *ast.Ident:
+			switch lrt.Name {
 			case "error":
-				errReturn = name
+				resultCode = "\tif _res != 0 {\n\t\t" + name + " = "
+				if m.packageName != "com" {
+					resultCode += "com."
+				}
+				resultCode += "HResult(_res)\n\t}\n"
 				results.List = results.List[:len(results.List)-1]
 			case "int":
-				intReturn = name
+				resultCode = "\t" + name + " = int(_res)\n"
 				results.List = results.List[:len(results.List)-1]
 			}
+
+		case *ast.StarExpr:
+			b := new(bytes.Buffer)
+			err = m.printConfig.Fprint(b, m.fileSet, lrt)
+			if err != nil {
+				return
+			}
+			resultCode = "\t" + name + " = (" + b.String() + ")(unsafe.Pointer(_res))\n"
+			results.List = results.List[:len(results.List)-1]
 		}
+	}
+	if resultCode == "" {
+		resultCode = "\t_ = _res\n"
 	}
 
 	for _, p := range ft.Params.List {
@@ -80,17 +86,11 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 			switch t := p.Type.(type) {
 			case *ast.Ident:
 				switch t.Name {
-				case "int", "int32", "uint", "uint32":
+				case "int", "int8", "int16", "int32", "uint", "uint8", "uint16", "uint32", "byte", "rune":
 					params = append(params, "uintptr("+ident.Name+")")
 
 				case "string":
-					tempName := fmt.Sprintf("_p%d", len(params))
-					setupCode += "\tvar " + tempName + " *uint16\n\t" +
-						tempName + ", err = syscall.UTF16PtrFromString(" + ident.Name + ")\n" +
-						"\tif err != nil {\n" +
-						"\t\treturn\n" +
-						"\t}\n"
-					params = append(params, "uintptr(unsafe.Pointer("+tempName+"))")
+					params = append(params, "uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("+ident.Name+")))")
 
 				default:
 					err = fmt.Errorf("unsupported parameter type: %s", t.Name)

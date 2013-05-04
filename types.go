@@ -5,6 +5,7 @@ import (
 	"strings"
 	"syscall"
 	"unicode/utf16"
+	"unsafe"
 )
 
 // http://msdn.microsoft.com/en-us/library/windows/desktop/aa373931.aspx
@@ -29,7 +30,7 @@ func NewGUID(s string) *GUID {
 	return &g
 }
 
-type HResult int32
+type HResult uint32
 
 func (hr HResult) Error() string {
 	buf := make([]uint16, 300)
@@ -39,4 +40,13 @@ func (hr HResult) Error() string {
 		return fmt.Sprintf("COM error %08x", uint32(hr))
 	}
 	return strings.TrimSpace(string(utf16.Decode(buf[:n])))
+}
+
+func ToBStr(s string) *uint16 {
+	u16 := utf16.Encode([]rune(s))
+	l := len(u16) * 2
+	b := make([]uint16, len(u16)+3)
+	copy(b, (*[2]uint16)(unsafe.Pointer(&l))[:])
+	copy(b[2:], u16)
+	return &b[0]
 }
