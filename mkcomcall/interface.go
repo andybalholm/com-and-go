@@ -139,6 +139,17 @@ func (m *module) writeInterface(w io.Writer, i *iface) error {
 	if i.classID != "" {
 		fmt.Fprintf(w, "var CLSID_%s = %sNewGUID(%q)\n", i.name, prefix, i.classID)
 	}
+
+	if i.iID != "" && i.classID != "" {
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "func New%s() (*%s, error) {\n", i.name, i.name)
+		fmt.Fprintf(w, "\tu, err := %sCoCreateInstance(CLSID_%s, nil, 21, IID_%s)\n", prefix, i.name, i.name)
+		fmt.Fprint(w, "\tif err != nil {\n\t\treturn nil, err\n\t}\n")
+		fmt.Fprintf(w, "\treturn (*%s)(u), nil\n", i.name)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w)
+	}
+
 	fmt.Fprintf(w, "type %s struct {\n", i.name)
 	if i.extends == "" {
 		fmt.Fprintf(w, "\t*%sVTable\n", prefix)
