@@ -80,41 +80,6 @@ func SysFreeString(s BStr) {
 	return
 }
 
-var IID_IUnknown = NewGUID("{00000000-0000-0000-C000-000000000046}")
-
-type IUnknown struct {
-	*VTable
-}
-
-func (this *IUnknown) QueryInterface(iid *GUID) (object unsafe.Pointer, err error) {
-	_res, _, _ := syscall.Syscall(this.VTable[0], 3,
-		uintptr(unsafe.Pointer(this)),
-		uintptr(unsafe.Pointer(iid)),
-		uintptr(unsafe.Pointer(&object)))
-	if _res != 0 {
-		err = HResult(_res)
-	}
-	return
-}
-
-func (this *IUnknown) AddRef() (newCount int) {
-	_res, _, _ := syscall.Syscall(this.VTable[1], 1,
-		uintptr(unsafe.Pointer(this)),
-		0,
-		0)
-	newCount = int(_res)
-	return
-}
-
-func (this *IUnknown) Release() (newCount int) {
-	_res, _, _ := syscall.Syscall(this.VTable[2], 1,
-		uintptr(unsafe.Pointer(this)),
-		0,
-		0)
-	newCount = int(_res)
-	return
-}
-
 var IID_IDispatch = NewGUID("{00020400-0000-0000-C000-000000000046}")
 
 type IDispatch struct {
@@ -174,5 +139,40 @@ func (this *IDispatch) Invoke(member uint32, iid *GUID, localeID uint32, flags u
 	if _res != 0 {
 		err = HResult(_res)
 	}
+	return
+}
+
+var IID_IUnknown = NewGUID("{00000000-0000-0000-C000-000000000046}")
+
+type IUnknown struct {
+	*VTable
+}
+
+func (this *IUnknown) QueryInterface(iid *GUID) (object unsafe.Pointer, err error) {
+	_res, _, _ := syscall.Syscall(this.VTable[0], 3,
+		uintptr(unsafe.Pointer(this)),
+		uintptr(unsafe.Pointer(iid)),
+		uintptr(unsafe.Pointer(&object)))
+	if _res != 0 {
+		err = HResult(_res)
+	}
+	return
+}
+
+func (this *IUnknown) AddRef() (newCount int) {
+	_res, _, _ := syscall.Syscall(this.VTable[1], 1,
+		uintptr(unsafe.Pointer(this)),
+		0,
+		0)
+	newCount = int(_res)
+	return
+}
+
+func (this *IUnknown) Release() (newCount int) {
+	_res, _, _ := syscall.Syscall(this.VTable[2], 1,
+		uintptr(unsafe.Pointer(this)),
+		0,
+		0)
+	newCount = int(_res)
 	return
 }

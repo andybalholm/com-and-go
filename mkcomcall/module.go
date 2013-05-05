@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -59,10 +60,16 @@ func (m *module) write(w io.Writer) error {
 	fmt.Fprintln(w)
 
 	if len(m.imports) > 0 {
+		paths := make([]string, 0, len(m.imports))
+		for s := range m.imports {
+			paths = append(paths, s)
+		}
+		sort.Strings(paths)
+
 		fmt.Fprintln(w, "import (")
-		for _, imp := range m.imports {
+		for _, imp := range paths {
 			fmt.Fprint(w, "\t")
-			err := m.printConfig.Fprint(w, m.fileSet, imp)
+			err := m.printConfig.Fprint(w, m.fileSet, m.imports[imp])
 			if err != nil {
 				return err
 			}
@@ -100,15 +107,18 @@ func (m *module) write(w io.Writer) error {
 		}
 	}
 
+	ifNames := make([]string, 0, len(m.interfaces))
 	for ifName := range m.interfaces {
 		err := m.calcVTStart(ifName, 0)
 		if err != nil {
 			return err
 		}
+		ifNames = append(ifNames, ifName)
 	}
+	sort.Strings(ifNames)
 
-	for _, i := range m.interfaces {
-		err := m.writeInterface(w, i)
+	for _, i := range ifNames {
+		err := m.writeInterface(w, m.interfaces[i])
 		if err != nil {
 			return err
 		}

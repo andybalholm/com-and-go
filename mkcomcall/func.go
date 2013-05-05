@@ -17,7 +17,7 @@ func (m *module) writeFunc(w io.Writer, f *ast.FuncDecl) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(w, "{")
+	fmt.Fprintln(w, " {")
 
 	params, setupCode, resultCode, err := m.analyzeParameterList(f.Type)
 	if err != nil {
