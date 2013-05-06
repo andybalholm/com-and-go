@@ -157,37 +157,88 @@ func ToVariant(x interface{}) Variant {
 	panic(fmt.Errorf("converting %T to Variant is not implemented", x))
 }
 
-func (v Variant) IDispatch() *IDispatch {
-	switch v.VT {
-	case VT_DISPATCH:
-		return (*IDispatch)(unsafe.Pointer(uintptr(v.Val)))
-	case VT_DISPATCH | VT_BYREF:
-		return *(**IDispatch)(unsafe.Pointer(uintptr(v.Val)))
-	case VT_UNKNOWN, VT_UNKNOWN | VT_BYREF:
-		u := v.IUnknown()
-		d, err := u.QueryInterface(IID_IDispatch)
-		if err != nil {
-			panic(err)
-		}
-		return (*IDispatch)(d)
-	}
-	panic(fmt.Errorf("can't convert Variant with type 0x%04X to IDispatch", v.VT))
-}
+// ToInterface returns v's value wrapped in an interface{} instead of in a
+// Variant. If it can't convert the value, it wraps v in the interface{}
+// instead.
+func (v Variant) ToInterface() interface{} {
+	// Avoid typing this conversion so many times.
+	p := unsafe.Pointer(uintptr(v.Val))
 
-func (v Variant) IUnknown() *IUnknown {
 	switch v.VT {
-	case VT_UNKNOWN, VT_DISPATCH:
-		return (*IUnknown)(unsafe.Pointer(uintptr(v.Val)))
-	case VT_UNKNOWN | VT_BYREF, VT_DISPATCH | VT_BYREF:
-		return *(**IUnknown)(unsafe.Pointer(uintptr(v.Val)))
-	}
-	panic(fmt.Errorf("can't convert Variant with type 0x%04X to IUnknown", v.VT))
-}
-
-func (v Variant) String() string {
-	switch v.VT {
+	case VT_NULL:
+		return nil
+	case VT_I2:
+		return int16(v.Val)
+	case VT_I2 | VT_BYREF:
+		return (*int16)(p)
+	case VT_I4:
+		return int32(v.Val)
+	case VT_I4 | VT_BYREF:
+		return (*int32)(p)
+	case VT_R4:
+		return math.Float32frombits(uint32(v.Val))
+	case VT_R4 | VT_BYREF:
+		return (*float32)(p)
+	case VT_R8:
+		return math.Float64frombits(v.Val)
+	case VT_R8 | VT_BYREF:
+		return (*float64)(p)
 	case VT_BSTR:
-		return BStr{(*uint16)(unsafe.Pointer(uintptr(v.Val)))}.String()
+		b := BStr{(*uint16)(p)}
+		s := b.String()
+		SysFreeString(b)
+		return s
+	case VT_BSTR | VT_BYREF:
+		return (*BStr)(p)
+	case VT_DISPATCH:
+		return (*IDispatch)(p)
+	case VT_DISPATCH | VT_BYREF:
+		return (**IDispatch)(p)
+	case VT_ERROR:
+		return HResult(v.Val)
+	case VT_ERROR | VT_BYREF:
+		return (*HResult)(p)
+	case VT_BOOL:
+		return v.Val != 0
+	case VT_VARIANT | VT_BYREF:
+		return (*Variant)(p)
+	case VT_UNKNOWN:
+		return (*IUnknown)(p)
+	case VT_UNKNOWN | VT_BYREF:
+		return (**IUnknown)(p)
+	case VT_I1:
+		return int8(v.Val)
+	case VT_I1 | VT_BYREF:
+		return (*int8)(p)
+	case VT_UI1:
+		return uint8(v.Val)
+	case VT_UI1 | VT_BYREF:
+		return (*uint8)(p)
+	case VT_UI2:
+		return uint16(v.Val)
+	case VT_UI2 | VT_BYREF:
+		return (*uint16)(p)
+	case VT_UI4:
+		return uint32(v.Val)
+	case VT_UI4 | VT_BYREF:
+		return (*uint32)(p)
+	case VT_I8:
+		return int64(v.Val)
+	case VT_I8 | VT_BYREF:
+		return (*int64)(p)
+	case VT_UI8:
+		return v.Val
+	case VT_UI8 | VT_BYREF:
+		return (*uint64)(p)
+	case VT_INT:
+		return int(int32(v.Val))
+	case VT_UINT:
+		return uint(v.Val)
+	case VT_UINT_PTR:
+		return uintptr(v.Val)
+	case VT_UINT_PTR | VT_BYREF:
+		return (*uintptr)(p)
 	}
-	panic(fmt.Errorf("can't convert Variant with type 0x%04X to string", v.VT))
+
+	return v
 }

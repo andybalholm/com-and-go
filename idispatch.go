@@ -1,7 +1,7 @@
 package com
 
 import (
-	"errors"
+	"fmt"
 	"syscall"
 	"unsafe"
 )
@@ -10,14 +10,33 @@ type ITypeInfo uintptr // TODO
 
 type ExcepInfo struct {
 	Code           uint16
-	Reserved       uint16
-	Source         *uint16
-	Description    *uint16
-	HelpFile       *uint16
+	WReserved      uint16
+	Source         BStr
+	Description    BStr
+	HelpFile       BStr
 	HelpContext    uint32
 	PvReserved     uintptr
 	DeferredFillIn uintptr
 	Scode          int32
+}
+
+func (e *ExcepInfo) Error() string {
+	if e.Description.P != nil {
+		return e.Description.String()
+	}
+	if e.DeferredFillIn != 0 {
+		syscall.Syscall(e.DeferredFillIn, 1,
+			uintptr(unsafe.Pointer(e)),
+			0,
+			0)
+	}
+	if e.Description.P != nil {
+		return e.Description.String()
+	}
+	if e.Source.P != nil {
+		return fmt.Sprintf("%s exception %d", e.Source, e.Code)
+	}
+	return fmt.Sprintf("COM exception %d", e.Code)
 }
 
 var IID_NULL = new(GUID)
@@ -85,28 +104,28 @@ func NewDispParams(params ...interface{}) *DispParams {
 	return dp
 }
 
-func (d *IDispatch) Call(methodName string, params ...interface{}) (result Variant, err error) {
+func (d *IDispatch) Call(methodName string, params ...interface{}) (interface{}, error) {
 	methodID, err := d.GetIDOfName(methodName)
 	if err != nil {
-		return
+		return nil, err
 	}
 	result, excepInfo, _, err := d.Invoke(methodID, IID_NULL, 0, DISPATCH_METHOD, NewDispParams(params...))
 	if err == HResult(0x80020009) {
-		err = errors.New(UTF16PtrToString(excepInfo.Description))
+		err = &excepInfo
 	}
-	return
+	return result.ToInterface(), err
 }
 
-func (d *IDispatch) Get(propertyName string) (result Variant, err error) {
+func (d *IDispatch) Get(propertyName string) (interface{}, error) {
 	id, err := d.GetIDOfName(propertyName)
 	if err != nil {
-		return
+		return nil, err
 	}
 	result, excepInfo, _, err := d.Invoke(id, IID_NULL, 0, DISPATCH_PROPERTYGET, new(DispParams))
 	if err == HResult(0x80020009) {
-		err = errors.New(UTF16PtrToString(excepInfo.Description))
+		err = &excepInfo
 	}
-	return
+	return result.ToInterface(), err
 }
 
 func (d *IDispatch) Put(propertyName string, value interface{}) (err error) {
@@ -124,7 +143,7 @@ func (d *IDispatch) Put(propertyName string, value interface{}) (err error) {
 	}
 	_, excepInfo, _, err := d.Invoke(id, IID_NULL, 0, DISPATCH_PROPERTYPUT, dp)
 	if err == HResult(0x80020009) {
-		err = errors.New(UTF16PtrToString(excepInfo.Description))
+		err = &excepInfo
 	}
 	return
 }
