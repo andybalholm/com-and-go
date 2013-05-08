@@ -14,6 +14,7 @@ var (
 	modoleaut32 = syscall.NewLazyDLL("oleaut32.dll")
 
 	procCoInitialize     = modole32.NewProc("CoInitialize")
+	procCoInitializeEx   = modole32.NewProc("CoInitializeEx")
 	procCLSIDFromProgID  = modole32.NewProc("CLSIDFromProgID")
 	procCoCreateInstance = modole32.NewProc("CoCreateInstance")
 	procStringFromGUID2  = modole32.NewProc("StringFromGUID2")
@@ -24,6 +25,15 @@ var (
 
 func CoInitialize(reserved int) (err error) {
 	_res, _, _ := procCoInitialize.Call(uintptr(reserved))
+	if _res != 0 {
+		err = HResult(_res)
+	}
+	return
+}
+
+func CoInitializeEx(reserved uintptr, coInit int) (err error) {
+	_res, _, _ := procCoInitializeEx.Call(reserved,
+		uintptr(coInit))
 	if _res != 0 {
 		err = HResult(_res)
 	}

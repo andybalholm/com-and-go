@@ -90,6 +90,10 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 					params = append(params, "uintptr("+ident.Name+")")
 					continue
 
+				case "uintptr":
+					params = append(params, ident.Name)
+					continue
+
 				case "string":
 					s := "uintptr(unsafe.Pointer("
 					if m.packageName != "com" {
