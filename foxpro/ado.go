@@ -73,32 +73,38 @@ func (s *stmt) NumInput() int {
 }
 
 func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
-	return nil, errors.New("foxpro: Exec isn't supported yet.")
+	_, result, err := s.q(args)
+	return result, err
 }
 
 func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
+	rows, _, err := s.q(args)
+	return rows, err
+}
+
+func (s *stmt) q(args []driver.Value) (driver.Rows, driver.Result, error) {
 	cmd, err := com.NewIDispatch("ADODB.Command")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer cmd.Release()
 	err = cmd.Put("ActiveConnection", s.c.db)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	err = cmd.Put("CommandText", s.query)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	err = cmd.Put("CommandType", 1)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	x, err := cmd.Get("Parameters")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	params := x.(*com.IDispatch)
 	defer params.Release()
@@ -109,7 +115,7 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 		case int64:
 			v32 := int32(v)
 			if int64(v32) != v {
-				return nil, fmt.Errorf("integer too large to pass to FoxPro: %d", v)
+				return nil, nil, fmt.Errorf("integer too large to pass to FoxPro: %d", v)
 			}
 			p, err = cmd.Call("CreateParameter", "", 3 /* adInteger */, 1, 4, v32)
 		case float64:
@@ -126,22 +132,23 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 			err = fmt.Errorf("foxpro: parameters of type %T are not supported", a)
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		param := p.(*com.IDispatch)
 		defer param.Release()
 		_, err = params.Call("Append", param)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	x, err = cmd.Call("Execute")
+	var nRecords int32
+	x, err = cmd.Call("Execute", &nRecords)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	recordset := x.(*com.IDispatch)
-	return &rows{recordset}, nil
+	return &rows{recordset}, driver.RowsAffected(nRecords), nil
 }
 
 type rows struct {
