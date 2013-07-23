@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 func init() {
@@ -119,6 +120,8 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 			p, err = cmd.Call("CreateParameter", "", 8 /* adBSTR */, 1, len(v), string(v))
 		case string:
 			p, err = cmd.Call("CreateParameter", "", 8 /* adBSTR */, 1, len(v), v)
+		case time.Time:
+			p, err = cmd.Call("CreateParameter", "", 7 /* adDate */, 1, 8, v)
 		default:
 			err = fmt.Errorf("foxpro: parameters of type %T are not supported", a)
 		}
@@ -194,7 +197,7 @@ func (r *rows) Next(dest []driver.Value) error {
 
 	x, err = r.rs.Get("Fields")
 	if err != nil {
-		panic(err)
+		return err
 	}
 	fields := x.(*com.IDispatch)
 	defer fields.Release()
@@ -202,14 +205,14 @@ func (r *rows) Next(dest []driver.Value) error {
 	for i := range dest {
 		x, err = fields.Call("Item", int32(i))
 		if err != nil {
-			panic(err)
+			return err
 		}
 		item := x.(*com.IDispatch)
 		defer item.Release()
 
 		x, err = item.Get("Value")
 		if err != nil {
-			panic(err)
+			return err
 		}
 		switch v := x.(type) {
 		case string:
@@ -220,14 +223,20 @@ func (r *rows) Next(dest []driver.Value) error {
 			dest[i] = v
 		case com.Decimal:
 			dest[i] = v.String()
+		case time.Time:
+			dest[i] = v
+		case float64:
+			dest[i] = v
+		case com.Variant:
+			return fmt.Errorf("foxpro: result variant with VT=%d not supported yet", v.VT)
 		default:
-			panic(fmt.Errorf("foxpro: result type %T not supported yet", v))
+			return fmt.Errorf("foxpro: result type %T not supported yet", v)
 		}
 	}
 
 	_, err = r.rs.Call("MoveNext")
 	if err != nil {
-		panic(err)
+		return err
 	}
 	return nil
 }

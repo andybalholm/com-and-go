@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -154,6 +155,25 @@ func ToVariant(x interface{}) Variant {
 		return Variant{VT_UINT_PTR, 0, 0, 0, uint64(v)}
 	case *uintptr:
 		return Variant{VT_UINT_PTR | VT_BYREF, 0, 0, 0, uint64(uintptr(unsafe.Pointer(v)))}
+	case time.Time:
+		if v.IsZero() {
+			return Variant{VT_DATE, 0, 0, 0, 0}
+		}
+		hour, min, sec := v.Clock()
+		t := float64(hour*3600+min*60+sec) / 86400
+		year, month, day := v.Date()
+		if year == 0 && month == 1 && day == 1 {
+			return Variant{VT_DATE, 0, 0, 0, math.Float64bits(t)}
+		}
+		// Find the number of days between this date and Dec. 30 1899.
+		diff := time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Sub(time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC))
+		d := float64(diff / (24 * time.Hour))
+		if d >= 0 {
+			d += t
+		} else {
+			d -= t
+		}
+		return Variant{VT_DATE, 0, 0, 0, math.Float64bits(d)}
 	}
 
 	panic(fmt.Errorf("converting %T to Variant is not implemented", x))
@@ -245,6 +265,20 @@ func (v Variant) ToInterface() interface{} {
 		return *d
 	case VT_DECIMAL | VT_BYREF:
 		return (*Decimal)(p)
+	case VT_DATE:
+		// see http://blogs.msdn.com/b/ericlippert/archive/2003/09/16/eric-s-complete-guide-to-vt-date.aspx
+		d, t := math.Modf(math.Float64frombits(uint64(v.Val)))
+		t = math.Abs(t)
+		if d == 0 {
+			// We'll just have to hope that no one ever wants to actually refer to Dec. 30, 1899.
+			if t == 0 {
+				return time.Time{} // zero time
+			}
+			return time.Date(0, 1, 1, 0, 0, int(t*86400), 0, time.Local) // time without date
+		}
+		return time.Date(1899, 12, 30+int(d), 0, 0, int(t*86400), 0, time.Local)
+	case VT_CY:
+		return float64(int64(v.Val)) / 10000
 	}
 
 	return v
