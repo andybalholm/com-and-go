@@ -3,6 +3,8 @@ package com
 import (
 	"fmt"
 	"math"
+	"math/big"
+	"strings"
 	"unsafe"
 )
 
@@ -238,7 +240,43 @@ func (v Variant) ToInterface() interface{} {
 		return uintptr(v.Val)
 	case VT_UINT_PTR | VT_BYREF:
 		return (*uintptr)(p)
+	case VT_DECIMAL:
+		d := (*Decimal)(unsafe.Pointer(&v))
+		return *d
+	case VT_DECIMAL | VT_BYREF:
+		return (*Decimal)(p)
 	}
 
 	return v
+}
+
+type Decimal struct {
+	wReserved uint16
+	Scale     byte
+	Sign      byte
+	Hi32      uint32
+	Lo64      uint64
+}
+
+func (d Decimal) String() string {
+	i := big.NewInt(0)
+	i.SetUint64(d.Lo64)
+	if d.Hi32 > 0 {
+		hi := big.NewInt(int64(d.Hi32))
+		two64 := big.NewInt(0)
+		two64.SetBit(two64, 64, 1)
+		hi.Mul(hi, two64)
+		i.Add(i, hi)
+	}
+	s := i.String()
+	if d.Scale > 0 {
+		if zeroes := int(d.Scale) - len(s) + 1; zeroes > 0 {
+			s = strings.Repeat("0", zeroes) + s
+		}
+		s = s[:len(s)-int(d.Scale)] + "." + s[len(s)-int(d.Scale):]
+	}
+	if d.Sign&0x80 == 0x80 {
+		s = "-" + s
+	}
+	return s
 }

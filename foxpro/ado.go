@@ -194,7 +194,7 @@ func (r *rows) Next(dest []driver.Value) error {
 
 	x, err = r.rs.Get("Fields")
 	if err != nil {
-		return err
+		panic(err)
 	}
 	fields := x.(*com.IDispatch)
 	defer fields.Release()
@@ -202,23 +202,32 @@ func (r *rows) Next(dest []driver.Value) error {
 	for i := range dest {
 		x, err = fields.Call("Item", int32(i))
 		if err != nil {
-			return err
+			panic(err)
 		}
 		item := x.(*com.IDispatch)
 		defer item.Release()
 
 		x, err = item.Get("Value")
 		if err != nil {
-			return err
+			panic(err)
 		}
 		switch v := x.(type) {
 		case string:
 			dest[i] = strings.TrimRight(v, " ")
+		case int32:
+			dest[i] = int64(v)
+		case bool:
+			dest[i] = v
+		case com.Decimal:
+			dest[i] = v.String()
 		default:
-			return fmt.Errorf("foxpro: result type %T not supported yet", v)
+			panic(fmt.Errorf("foxpro: result type %T not supported yet", v))
 		}
 	}
 
 	_, err = r.rs.Call("MoveNext")
-	return err
+	if err != nil {
+		panic(err)
+	}
+	return nil
 }
