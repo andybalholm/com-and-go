@@ -106,6 +106,15 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 				case "BStr":
 					params = append(params, "uintptr(unsafe.Pointer("+ident.Name+".P))")
 					continue
+
+				case "bool":
+					s := ""
+					if m.packageName != "com" {
+						s += "com."
+					}
+					s += "VariantBool(" + ident.Name + ")"
+					params = append(params, s)
+					continue
 				}
 
 			case *ast.StarExpr:

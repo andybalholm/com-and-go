@@ -85,3 +85,10 @@ func (b BStr) String() string {
 	a := (*[1 << 29]uint16)(unsafe.Pointer(b.P))[:n]
 	return string(utf16.Decode(a))
 }
+
+func VariantBool(x bool) uintptr {
+	if x {
+		return ^uintptr(0)
+	}
+	return 0
+}
