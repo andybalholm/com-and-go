@@ -52,7 +52,7 @@ func (m *module) write(w io.Writer) error {
 	fmt.Fprintln(w, "package", m.packageName)
 	fmt.Fprintln(w)
 	if m.packageName != "com" {
-		m.addImport("com-and-go")
+		m.addImport("code.google.com/p/com-and-go")
 	}
 	m.addImport("unsafe")
 

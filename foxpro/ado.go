@@ -3,7 +3,7 @@
 package foxpro
 
 import (
-	"com-and-go"
+	"code.google.com/p/com-and-go"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
