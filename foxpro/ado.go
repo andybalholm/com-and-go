@@ -234,6 +234,8 @@ func (r *rows) Next(dest []driver.Value) error {
 			dest[i] = v
 		case float64:
 			dest[i] = v
+		case nil:
+			dest[i] = nil
 		case com.Variant:
 			return fmt.Errorf("foxpro: result variant with VT=%d not supported yet", v.VT)
 		default:
