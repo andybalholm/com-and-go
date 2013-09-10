@@ -24,10 +24,15 @@ func (m *module) writeFunc(w io.Writer, f *ast.FuncDecl) error {
 		return err
 	}
 
+	prefix := ""
+	if m.packageName != "com" {
+		prefix = "com."
+	}
+
 	if setupCode != "" {
 		fmt.Fprintln(w, setupCode)
 	}
-	fmt.Fprintf(w, "\t_res, _, _ := proc%s.Call(%s)\n", f.Name.Name, strings.Join(params, ",\n\t\t"))
+	fmt.Fprintf(w, "\t_res, _, _ := %sSyscall(proc%s.Addr(),\n\t\t%s)\n", prefix, f.Name.Name, strings.Join(params, ",\n\t\t"))
 
 	fmt.Fprint(w, resultCode)
 	fmt.Fprintln(w, "\treturn")
@@ -44,6 +49,11 @@ func (m *module) writeFunc(w io.Writer, f *ast.FuncDecl) error {
 // that sets up the return value. It assumes that the first return value from
 // the DLL function is assigned to a variable named _res.
 func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupCode, resultCode string, err error) {
+	prefix := ""
+	if m.packageName != "com" {
+		prefix = "com."
+	}
+
 	// Find errReturn or intReturn.
 	if results := ft.Results; results != nil && len(results.List) > 0 {
 		lastResult := results.List[len(results.List)-1]
@@ -52,11 +62,7 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 		case *ast.Ident:
 			switch lrt.Name {
 			case "error":
-				resultCode = "\tif _res != 0 {\n\t\t" + name + " = "
-				if m.packageName != "com" {
-					resultCode += "com."
-				}
-				resultCode += "HResult(_res)\n\t}\n"
+				resultCode = "\tif _res != 0 {\n\t\t" + name + " = " + prefix + "HResult(_res)\n\t}\n"
 				results.List = results.List[:len(results.List)-1]
 			case "int":
 				resultCode = "\t" + name + " = int(_res)\n"
@@ -86,63 +92,35 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 			switch t := p.Type.(type) {
 			case *ast.Ident:
 				switch t.Name {
-				case "int", "int8", "int16", "int32", "uint", "uint8", "uint16", "uint32", "byte", "rune":
-					params = append(params, "uintptr("+ident.Name+")")
-					continue
-
-				case "uintptr":
-					params = append(params, ident.Name)
-					continue
-
 				case "string":
-					s := "uintptr(unsafe.Pointer("
-					if m.packageName != "com" {
-						s += "com."
-					}
-					s += "BStrFromString(" + ident.Name + ").P))"
-					params = append(params, s)
-					continue
-
-				case "BStr":
-					params = append(params, "uintptr(unsafe.Pointer("+ident.Name+".P))")
-					continue
+					params = append(params, prefix+"BStrFromString("+ident.Name+").P")
 
 				case "bool":
-					s := ""
-					if m.packageName != "com" {
-						s += "com."
-					}
-					s += "VariantBool(" + ident.Name + ")"
-					params = append(params, s)
-					continue
+					params = append(params, prefix+"VariantBool("+ident.Name+")")
+
+				default:
+					params = append(params, ident.Name)
 				}
 
 			case *ast.StarExpr:
-				params = append(params, "uintptr(unsafe.Pointer("+ident.Name+"))")
-				continue
+				params = append(params, ident.Name)
 
 			case *ast.ArrayType:
 				if t.Len == nil {
 					// It's a slice.
-					params = append(params, "uintptr(unsafe.Pointer(&"+ident.Name+"[0]))",
-						"uintptr(len("+ident.Name+"))")
+					params = append(params, "&"+ident.Name+"[0]",
+						"len("+ident.Name+")")
 				} else {
 					// It's an array.
-					params = append(params, "uintptr(unsafe.Pointer(&"+ident.Name+"))")
+					params = append(params, "&"+ident.Name)
 				}
-				continue
 
-			case *ast.SelectorExpr:
-				if ident, ok := t.X.(*ast.Ident); ok && ident.Name == "com" && t.Sel.Name == "BStr" {
-					params = append(params, "uintptr(unsafe.Pointer("+ident.Name+".P))")
-					continue
-				}
+			case *ast.InterfaceType:
+				params = append(params, prefix+"ToVariant("+ident.Name+")")
+
+			default:
+				params = append(params, ident.Name)
 			}
-
-			buf := new(bytes.Buffer)
-			m.printConfig.Fprint(buf, m.fileSet, p.Type)
-			err = fmt.Errorf("unsupported parameter type: %s", buf)
-			return
 		}
 	}
 
@@ -153,26 +131,32 @@ func (m *module) analyzeParameterList(ft *ast.FuncType) (params []string, setupC
 				return
 			}
 
-			if t, ok := p.Type.(*ast.Ident); ok && t.Name == "string" {
+			switch t := p.Type.(type) {
+			case *ast.Ident:
+				if t.Name == "string" {
+					for _, ident := range p.Names {
+						tmpName := "_tmp_" + ident.Name
+						setupCode += fmt.Sprintf("\tvar %s %sBStr\n", tmpName, prefix)
+						resultCode += fmt.Sprintf("\t%s = %s.String()\n\t%sSysFreeString(%s)\n",
+							ident.Name, tmpName, prefix, tmpName)
+
+						params = append(params, "&"+tmpName)
+					}
+					continue
+				}
+
+			case *ast.InterfaceType:
 				for _, ident := range p.Names {
 					tmpName := "_tmp_" + ident.Name
-					if m.packageName == "com" {
-						setupCode += fmt.Sprintf("\tvar %s BStr\n", tmpName)
-						resultCode += fmt.Sprintf("\t%s = %s.String()\n\tSysFreeString(%s)\n",
-							ident.Name, tmpName, tmpName)
-					} else {
-						setupCode += fmt.Sprintf("\tvar %s com.BStr\n", tmpName)
-						resultCode += fmt.Sprintf("\t%s = %s.String()\n\tcom.SysFreeString(%s)\n",
-							ident.Name, tmpName, tmpName)
-					}
-
-					params = append(params, fmt.Sprintf("uintptr(unsafe.Pointer(&%s))", tmpName))
+					setupCode += fmt.Sprintf("\tvar %s %sVariant\n", tmpName, prefix)
+					resultCode += fmt.Sprintf("\t%s = %s.ToInterface()\n", ident.Name, tmpName)
+					params = append(params, "&"+tmpName)
 				}
 				continue
 			}
 
 			for _, ident := range p.Names {
-				params = append(params, "uintptr(unsafe.Pointer(&"+ident.Name+"))")
+				params = append(params, "&"+ident.Name)
 			}
 		}
 	}

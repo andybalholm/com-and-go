@@ -25,10 +25,7 @@ func (e *ExcepInfo) Error() string {
 		return e.Description.String()
 	}
 	if e.DeferredFillIn != 0 {
-		syscall.Syscall(e.DeferredFillIn, 1,
-			uintptr(unsafe.Pointer(e)),
-			0,
-			0)
+		Syscall(e.DeferredFillIn, e)
 	}
 	if e.Description.P != nil {
 		return e.Description.String()

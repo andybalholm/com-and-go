@@ -178,7 +178,6 @@ func (m *module) loadFile(f *ast.File) error {
 					if err != nil {
 						return err
 					}
-					m.addImport("syscall")
 					m.interfaces[IF.name] = IF
 				}
 				continue

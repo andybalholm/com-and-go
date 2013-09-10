@@ -193,42 +193,15 @@ func (m *module) writeInterface(w io.Writer, i *iface) error {
 		if err != nil {
 			return err
 		}
-		params = append([]string{"uintptr(unsafe.Pointer(this))"}, params...)
-		nParams := len(params)
+		params = append([]string{"this"}, params...)
 
 		if setupCode != "" {
 			fmt.Fprintln(w, setupCode)
 		}
 
-		funcName := "Syscall"
-		paramsNeeded := 3
-		switch {
-		case len(params) > 18:
-			return fmt.Errorf("method %s.%s has too many parameters.", i.name, meth.Names[0].Name)
-		case len(params) > 15:
-			funcName = "Syscall18"
-			paramsNeeded = 18
-		case len(params) > 12:
-			funcName = "Syscall15"
-			paramsNeeded = 15
-		case len(params) > 9:
-			funcName = "Syscall12"
-			paramsNeeded = 12
-		case len(params) > 6:
-			funcName = "Syscall9"
-			paramsNeeded = 9
-		case len(params) > 3:
-			funcName = "Syscall6"
-			paramsNeeded = 6
-		}
-		for len(params) < paramsNeeded {
-			params = append(params, "0")
-		}
-
-		fmt.Fprintf(w, "\t_res, _, _ := syscall.%s(this.VTable[%d], %d,\n\t\t%s)\n",
-			funcName,
+		fmt.Fprintf(w, "\t_res, _, _ := %sSyscall(this.VTable[%d],\n\t\t%s)\n",
+			prefix,
 			i.vtStart+n,
-			nParams,
 			strings.Join(params, ",\n\t\t"))
 
 		fmt.Fprint(w, resultCode)
