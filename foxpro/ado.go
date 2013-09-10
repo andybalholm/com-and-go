@@ -4,6 +4,7 @@ package foxpro
 
 import (
 	"code.google.com/p/com-and-go"
+	"code.google.com/p/com-and-go/ado"
 	"database/sql"
 	"database/sql/driver"
 	"errors"
@@ -25,7 +26,7 @@ func (d foxDriver) Open(name string) (driver.Conn, error) {
 		return nil, err
 	}
 
-	db, err := com.NewIDispatch("ADODB.Connection")
+	db, err := ado.NewConnection()
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +35,7 @@ func (d foxDriver) Open(name string) (driver.Conn, error) {
 		db: db,
 	}
 	dsn := fmt.Sprintf("Provider=vfpoledb;Data Source=%s;", name)
-	_, err = db.Call("Open", dsn)
+	err = db.Open(dsn, "", "", ado.ConnectUnspecified)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func (d foxDriver) Open(name string) (driver.Conn, error) {
 }
 
 type conn struct {
-	db *com.IDispatch
+	db *ado.Connection
 }
 
 func (c *conn) Prepare(query string) (driver.Stmt, error) {
@@ -51,7 +52,7 @@ func (c *conn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (c *conn) Close() error {
-	_, err := c.db.Call("Close")
+	err := c.db.Close()
 	return err
 }
 
@@ -83,106 +84,100 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 }
 
 func (s *stmt) q(args []driver.Value) (driver.Rows, driver.Result, error) {
-	cmd, err := com.NewIDispatch("ADODB.Command")
+	cmd, err := ado.NewCommand()
 	if err != nil {
 		return nil, nil, err
 	}
 	defer cmd.Release()
-	err = cmd.Put("ActiveConnection", s.c.db)
+	err = cmd.PutrefActiveADOConnection(s.c.db)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	err = cmd.Put("CommandText", s.query)
+	err = cmd.PutCommandText(s.query)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = cmd.Put("CommandType", 1)
+	err = cmd.PutCommandType(1)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	x, err := cmd.Get("Parameters")
+	params, err := cmd.GetParameters()
 	if err != nil {
 		return nil, nil, err
 	}
-	params := x.(*com.IDispatch)
 	defer params.Release()
 
 	for _, a := range args {
-		var p interface{} // the parameter object
+		var param *ado.Parameter
 		switch v := a.(type) {
 		case int64:
 			v32 := int32(v)
 			if int64(v32) != v {
 				return nil, nil, fmt.Errorf("integer too large to pass to FoxPro: %d", v)
 			}
-			p, err = cmd.Call("CreateParameter", "", 3 /* adInteger */, 1, 4, v32)
+			param, err = cmd.CreateParameter("", ado.Integer, ado.ParamInput, 4, v32)
 		case float64:
-			p, err = cmd.Call("CreateParameter", "", 5 /* adDouble */, 1, 8, v)
+			param, err = cmd.CreateParameter("", ado.Double, ado.ParamInput, 8, v)
 		case bool:
-			p, err = cmd.Call("CreateParameter", "", 11 /* adBoolean */, 1, 1, v)
+			param, err = cmd.CreateParameter("", ado.Boolean, ado.ParamInput, 1, v)
 		case []byte:
-			p, err = cmd.Call("CreateParameter", "", 8 /* adBSTR */, 1, len(v), string(v))
+			param, err = cmd.CreateParameter("", ado.BSTR, ado.ParamInput, uintptr(len(v)), string(v))
 		case string:
-			p, err = cmd.Call("CreateParameter", "", 8 /* adBSTR */, 1, len(v), v)
+			param, err = cmd.CreateParameter("", ado.BSTR, ado.ParamInput, uintptr(len(v)), v)
 		case time.Time:
-			p, err = cmd.Call("CreateParameter", "", 7 /* adDate */, 1, 8, v)
+			param, err = cmd.CreateParameter("", ado.Date, ado.ParamInput, 8, v)
 		default:
 			err = fmt.Errorf("foxpro: parameters of type %T are not supported", a)
 		}
 		if err != nil {
 			return nil, nil, err
 		}
-		param := p.(*com.IDispatch)
 		defer param.Release()
-		_, err = params.Call("Append", param)
+		err = params.Append(param)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	var nRecords int32
-	x, err = cmd.Call("Execute", &nRecords)
+	var nRecords com.Variant
+	recordset, err := cmd.Execute(&nRecords, nil, ado.OptionUnspecified)
 	if err != nil {
 		return nil, nil, err
 	}
-	recordset := x.(*com.IDispatch)
-	return &rows{recordset}, driver.RowsAffected(nRecords), nil
+	return &rows{recordset}, driver.RowsAffected(nRecords.Val), nil
 }
 
 type rows struct {
-	rs *com.IDispatch
+	rs *ado.Recordset
 }
 
 func (r *rows) Columns() []string {
-	x, err := r.rs.Get("Fields")
+	fields, err := r.rs.GetFields()
 	if err != nil {
 		panic(err)
 	}
-	fields := x.(*com.IDispatch)
 	defer fields.Release()
 
-	x, err = fields.Get("Count")
+	n, err := fields.GetCount()
 	if err != nil {
 		panic(err)
 	}
-	n := x.(int32)
 
 	cols := make([]string, n)
 	for i := int32(0); i < n; i++ {
-		x, err = fields.Call("Item", i)
+		item, err := fields.GetItem(i)
 		if err != nil {
 			panic(err)
 		}
-		item := x.(*com.IDispatch)
 		defer item.Release()
 
-		x, err = item.Get("Name")
+		name, err := item.GetName()
 		if err != nil {
 			panic(err)
 		}
-		cols[i] = x.(string)
+		cols[i] = name
 	}
 	return cols
 }
@@ -194,34 +189,32 @@ func (r *rows) Close() error {
 }
 
 func (r *rows) Next(dest []driver.Value) error {
-	x, err := r.rs.Get("EOF")
+	eof, err := r.rs.GetEOF()
 	if err != nil {
 		return err
 	}
-	if x == true {
+	if eof {
 		return io.EOF
 	}
 
-	x, err = r.rs.Get("Fields")
+	fields, err := r.rs.GetFields()
 	if err != nil {
 		return err
 	}
-	fields := x.(*com.IDispatch)
 	defer fields.Release()
 
 	for i := range dest {
-		x, err = fields.Call("Item", int32(i))
+		item, err := fields.GetItem(int32(i))
 		if err != nil {
 			return err
 		}
-		item := x.(*com.IDispatch)
 		defer item.Release()
 
-		x, err = item.Get("Value")
+		v, err := item.GetValue()
 		if err != nil {
 			return err
 		}
-		switch v := x.(type) {
+		switch v := v.(type) {
 		case string:
 			dest[i] = strings.TrimRight(v, " ")
 		case int32:
@@ -243,7 +236,7 @@ func (r *rows) Next(dest []driver.Value) error {
 		}
 	}
 
-	_, err = r.rs.Call("MoveNext")
+	err = r.rs.MoveNext()
 	if err != nil {
 		return err
 	}
