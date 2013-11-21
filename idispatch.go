@@ -130,6 +130,12 @@ func (d *IDispatch) Put(propertyName string, value interface{}) (err error) {
 	if err != nil {
 		return
 	}
+	var flags uint16
+	if _, ok := value.(*IDispatch); ok {
+		flags = DISPATCH_PROPERTYPUTREF
+	} else {
+		flags = DISPATCH_PROPERTYPUT
+	}
 	v := ToVariant(value)
 	pp := int32(DISPID_PROPERTYPUT)
 	dp := &DispParams{
@@ -138,7 +144,7 @@ func (d *IDispatch) Put(propertyName string, value interface{}) (err error) {
 		CArgs:           1,
 		CNamedArgs:      1,
 	}
-	_, excepInfo, _, err := d.Invoke(id, IID_NULL, 0, DISPATCH_PROPERTYPUT, dp)
+	_, excepInfo, _, err := d.Invoke(id, IID_NULL, 0, flags, dp)
 	if err == HResult(0x80020009) {
 		err = &excepInfo
 	}
