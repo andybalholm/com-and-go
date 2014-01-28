@@ -2,6 +2,6 @@
 #include <cgocall.h>
 void runtime·asmstdcall(void *c);
 
-void ·cSyscall(WinCall *c) {
+void ·cSyscall(LibCall *c) {
 	runtime·cgocall(runtime·asmstdcall, c);
 }
