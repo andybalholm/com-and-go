@@ -161,10 +161,6 @@ func (d *IDispatch) CallErr(methodName string, params ...interface{}) (interface
 	}
 
 	r := result.ToInterface()
-	if b, ok := r.(BStr); ok {
-		r = b.String()
-		b.Free()
-	}
 	return r, err
 }
 
@@ -189,10 +185,6 @@ func (d *IDispatch) GetErr(propertyName string) (interface{}, error) {
 	}
 
 	r := result.ToInterface()
-	if b, ok := r.(BStr); ok {
-		r = b.String()
-		b.Free()
-	}
 	return r, err
 }
 

@@ -26,6 +26,11 @@ func cSyscall(c *libCall)
 // CPU words in the argument list. Normally this is the same as the number of
 // arguments, but it is larger if any of the arguments is larger than a CPU
 // word.
+//
+// There are two main options for how to construct the argument list.
+// One is to use the argument list of a wrapper function; take the address of
+// the first argument (or potentially the method receiver).
+// The other is to create a custom struct type to hold the argument list.
 func (f Func) Call(argPtr unsafe.Pointer, argLen uintptr) (r1, r2, err uintptr) {
 	c := libCall{
 		fn:   f,

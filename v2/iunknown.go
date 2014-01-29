@@ -4,6 +4,10 @@ import (
 	"unsafe"
 )
 
+func init() {
+	CoInitializeEx(nil, 0)
+}
+
 var IID_IUnknown = NewGUID("{00000000-0000-0000-C000-000000000046}")
 
 type IUnknown struct {

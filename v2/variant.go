@@ -182,6 +182,9 @@ func ToVariant(x interface{}) Variant {
 // ToInterface returns v's value wrapped in an interface{} instead of in a
 // Variant. If it can't convert the value, it wraps v in the interface{}
 // instead.
+//
+// ToInterface should only be called once on a given Variant, since it may free
+// memory ponted to by v.Val.
 func (v Variant) ToInterface() interface{} {
 	// Avoid typing this conversion so many times.
 	p := unsafe.Pointer(uintptr(v.Val))
@@ -206,7 +209,10 @@ func (v Variant) ToInterface() interface{} {
 	case VT_R8 | VT_BYREF:
 		return (*float64)(p)
 	case VT_BSTR:
-		return BStr{(*uint16)(p)}
+		b := BStr{(*uint16)(p)}
+		s := b.String()
+		b.Free()
+		return s
 	case VT_BSTR | VT_BYREF:
 		return (*BStr)(p)
 	case VT_DISPATCH:
@@ -276,6 +282,15 @@ func (v Variant) ToInterface() interface{} {
 		return time.Date(1899, 12, 30+int(d), 0, 0, int(t*86400), 0, time.Local)
 	case VT_CY:
 		return float64(int64(v.Val)) / 10000
+	}
+
+	if v.VT&VT_ARRAY != 0 {
+		a := (*SafeArray)(p)
+		if a.GetDim() == 1 && a.GetElemSize() <= 8 {
+			defer a.Destroy()
+			return a.ToSlice()
+		}
+		return a
 	}
 
 	return v

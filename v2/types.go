@@ -122,6 +122,9 @@ func wideString(s string, terminate bool) []uint16 {
 // ToBStr returns s as a BStr (OLE Automation string). The result is allocated
 // with SysAllocStringLen, so it should be freed with SysFreeString.
 func ToBStr(s string) BStr {
+	if s == "" {
+		return BStr{nil}
+	}
 	ws := wideString(s, false)
 	return SysAllocStringLen(&ws[0], len(ws))
 }
