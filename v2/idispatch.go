@@ -137,6 +137,7 @@ func NewDispParams(params ...interface{}) *DispParams {
 	return dp
 }
 
+// CallErr calls a method by name, returning an error on failure.
 func (d *IDispatch) CallErr(methodName string, params ...interface{}) (interface{}, error) {
 	methodID, err := d.GetIDOfName(methodName)
 	if err != nil {
@@ -164,6 +165,9 @@ func (d *IDispatch) CallErr(methodName string, params ...interface{}) (interface
 	return r, err
 }
 
+// Call calls a method by name. It panics if an error is encountered.
+// Use Call when the only possible errors are programming mistakes; use CallErr
+// when I/O errors and such are possible.
 func (d *IDispatch) Call(methodName string, params ...interface{}) interface{} {
 	res, err := d.CallErr(methodName, params...)
 	if err != nil {
@@ -172,6 +176,7 @@ func (d *IDispatch) Call(methodName string, params ...interface{}) interface{} {
 	return res
 }
 
+// GetErr returns the value of a property of d, returning an error on failure.
 func (d *IDispatch) GetErr(propertyName string) (interface{}, error) {
 	id, err := d.GetIDOfName(propertyName)
 	if err != nil {
@@ -188,6 +193,8 @@ func (d *IDispatch) GetErr(propertyName string) (interface{}, error) {
 	return r, err
 }
 
+// Get returns the value of a property of d. It panics if an error is
+// encountered.
 func (d *IDispatch) Get(propertyName string) interface{} {
 	res, err := d.GetErr(propertyName)
 	if err != nil {
@@ -196,6 +203,7 @@ func (d *IDispatch) Get(propertyName string) interface{} {
 	return res
 }
 
+// PutErr sets a property of d, returning an error on failure.
 func (d *IDispatch) PutErr(propertyName string, value interface{}) (err error) {
 	id, err := d.GetIDOfName(propertyName)
 	if err != nil {
@@ -227,6 +235,7 @@ func (d *IDispatch) PutErr(propertyName string, value interface{}) (err error) {
 	return
 }
 
+// Put sets a property of d. It panics if an error is encoutered.
 func (d *IDispatch) Put(propertyName string, value interface{}) {
 	err := d.PutErr(propertyName, value)
 	if err != nil {
